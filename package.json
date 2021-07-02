@@ -1,0 +1,15 @@
+{
+  "name": "slack-racket",
+  "version": "1.0.0",
+  "description": "Make some noise using slack",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@slack/bolt": "^3.4.0",
+    "sound-play": "^1.1.0"
+  }
+}
