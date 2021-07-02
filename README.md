@@ -8,3 +8,7 @@
 ## Running the server
 
 Run `node app.js`
+
+---
+
+Icon in screenshot by LORC (https://lorcblog.blogspot.com/)
