@@ -27,6 +27,13 @@ const reply = async (cb, msg) => {
 // Whitelist
 // Fuzzy Search + Response with similar sounds
 
+// Prevent sounds from playing while other sounds are playing
+// https://www.npmjs.com/package/get-mp3-duration
+
+// Allow other commands to run other than playing sounds while paused
+
+// Add random messages
+
 const getDirectories = srcPath => {
     try {
         return fs.readdirSync(srcPath).filter(file => fs.statSync(path.join(srcPath, file)).isDirectory());
@@ -65,7 +72,8 @@ const formatFileListForSlack = (files) => {
     
 (async () => {
     const playRegex = /^(play)\s+([a-zA-Z0-9_\-\/\.]+)/;
-    const listRegex = /^(play list|play folders)(\s+|)(.+)/;
+    const searchRegex = /^(play search)\s+([a-zA-Z0-9_\-\/\.]+)/;
+    const listRegex = /^(play list|play listdir)(\s+|)(.+)/;
 
     await app.start(process.env.PORT || 3009);
 
@@ -75,30 +83,49 @@ const formatFileListForSlack = (files) => {
     })
 
     app.message('play help', async ({ message, say }) => {
-        await reply(say, "```Commands: \n play <path to sound> \n knock knock```");
+        await reply(say, "```Commands: \n play <sound> \n play list <folder> \n play listdir \n play search <search>```");
     })
 
     app.message(listRegex, async ({ message, say }) => {
         const match = message.text.match(listRegex);
-        const folder = match[3];
-        if (!folder) {
-            // Reply with directories
+        const searchFolder = match[3] || match[1] !== 'play listdir';
+        if (!searchFolder) {
+            // Reply with all directories
             await reply(say, formatFileListForSlack(getDirectories('./sounds')));
         } else {
-            // Reply with the files
+            // Reply with files in a given folder
             await reply(say, formatFileListForSlack(getFiles('./sounds/' + folder).map((file) => folder + '/' + file.replace('.mp3', ''))));
         }
         
     })
 
+    app.message(searchRegex, async ({ message, say }) => {
+        const match = message.text.match(searchRegex);
+        const search = match[2];
+        if (!search) {
+            await reply(say, `Yeah, I can't search for nothing... did you mean \`play list\`?`);
+            return;
+        }
+        const files = findInDir('./sounds/', new RegExp(search));
+        const numFiles = files.length;
+
+        if (numFiles === 0) {
+            await reply(say, `Hmm... I couldn't find anything with this term: \`${search}\``);
+            return;
+        }
+        if (numFiles >= 1) {
+            await reply(say, `${numFiles} result(s) for \`${search}\`! \n` + formatFileListForSlack(files));
+        }
+    });
+
     app.message(playRegex, async ({ message, say }) => {
         const match = message.text.match(playRegex);
         const search = match[2];
-        if (!search || ['help', 'list'].includes(search)) {
+        if (!search || ['help', 'list', 'search'].includes(search)) {
             return;
         }
 
-        const files = findInDir('./sounds/', new RegExp(search));
+        const files = findInDir('./sounds/', new RegExp(search + '\.mp3$'));
         const numFiles = files.length;
 
         if (numFiles === 0) {
@@ -110,7 +137,7 @@ const formatFileListForSlack = (files) => {
             sound.play(`${files[0]}`);
         }
         if (numFiles > 1) {
-            await reply(say, `Okay, here's the thing... I found ${numFiles} results for \`${search}\`, can you be more specific? \n` + formatFileListForSlack(files));
+            await reply(say, `Okay, here's the thing... I found ${numFiles} results ending with \`${search}\`, can you be more specific? \n` + formatFileListForSlack(files));
         }
     })
     
