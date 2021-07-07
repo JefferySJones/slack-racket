@@ -10,6 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "@slack/bolt": "^3.4.0",
+    "fuzzy-search": "^3.2.1",
     "sound-play": "^1.1.0"
   }
 }

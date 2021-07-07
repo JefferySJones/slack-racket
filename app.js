@@ -3,6 +3,8 @@ const sound = require('sound-play');
 const fs = require('fs');
 const path = require('path');
 
+// import FuzzySearch from 'fuzzy-search';
+
 // Initializes your app with your bot token and signing secret
 const app = new App({
     socketMode: true,
@@ -39,10 +41,31 @@ const getFiles = srcPath => {
         return [ `Path does not exist: ${srcPath}` ];
     }
 }
+
+const findInDir = (dir, filter, fileList = []) => {
+    const files = fs.readdirSync(dir);
+
+    files.forEach((file) => {
+        const filePath = path.join(dir, file);
+        const fileStat = fs.lstatSync(filePath);
+
+        if (fileStat.isDirectory()) {
+            findInDir(filePath, filter, fileList);
+        } else if (filter.test(filePath)) {
+            fileList.push(filePath);
+        }
+    });
+
+    return fileList;
+}
+
+const formatFileListForSlack = (files) => {
+    return "```" +JSON.stringify(files).replace(/\,/g, '\n').replace(/\[|\]|\"/g, '') + "```"
+}
     
 (async () => {
-    const playRegex = /^(play)\s+([^\s]*)/;
-    const listRegex = /^(play list|play folders)(\s+|)(.*)/;
+    const playRegex = /^(play)\s+([a-zA-Z0-9_\-\/\.]+)/;
+    const listRegex = /^(play list|play folders)(\s+|)(.+)/;
 
     await app.start(process.env.PORT || 3009);
 
@@ -60,26 +83,35 @@ const getFiles = srcPath => {
         const folder = match[3];
         if (!folder) {
             // Reply with directories
-            await reply(say, "```" + JSON.stringify(
-                    getDirectories('./sounds')
-                ).replace(/\,/g, '\n').replace(/\[|\]|\"/g, '') + "```");
+            await reply(say, formatFileListForSlack(getDirectories('./sounds')));
         } else {
             // Reply with the files
-            await reply(say, "```" + JSON.stringify(
-                    getFiles('./sounds/' + folder).map((file) => folder + '/' + file.replace('.mp3', ''))
-                ).replace(/\,/g, '\n').replace(/\[|\]|\"/g, '') + "```");
+            await reply(say, formatFileListForSlack(getFiles('./sounds/' + folder).map((file) => folder + '/' + file.replace('.mp3', ''))));
         }
         
     })
 
     app.message(playRegex, async ({ message, say }) => {
         const match = message.text.match(playRegex);
-        const file = match[2];
-        if (!file || ['help', 'list'].includes(file)) {
+        const search = match[2];
+        if (!search || ['help', 'list'].includes(search)) {
             return;
         }
-        await reply(say, `Attempting to play sounds/${match[2]}.mp3`);
-        sound.play(`sounds/${match[2]}.mp3`);
+
+        const files = findInDir('./sounds/', new RegExp(search));
+        const numFiles = files.length;
+
+        if (numFiles === 0) {
+            await reply(say, `Hmm... I couldn't find: \`${search}\``);
+            return;
+        }
+        if (numFiles === 1) {
+            await reply(say, `Playing ${files[0]}`);
+            sound.play(`${files[0]}`);
+        }
+        if (numFiles > 1) {
+            await reply(say, `Okay, here's the thing... I found ${numFiles} results for \`${search}\`, can you be more specific? \n` + formatFileListForSlack(files));
+        }
     })
     
     console.log('Slack Racket is running! (⚡️ Bolt)');
