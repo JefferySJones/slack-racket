@@ -15,7 +15,7 @@ const app = new App({
 });
 
 const reply = async (cb, msg) => {
-    const postAsSlackBot = process.env.POST_AS_SLACKBOT;
+    const postAsSlackBot = process.env.REPLY_ENABLED;
     if (postAsSlackBot == 'true') {
         await cb(msg);
         console.log(msg);
