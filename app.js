@@ -14,16 +14,6 @@ const app = new App({
     signingSecret: process.env.SLACK_SIGNING_SECRET,
 });
 
-const reply = async (cb, msg) => {
-    const postAsSlackBot = process.env.REPLY_ENABLED;
-    if (postAsSlackBot == 'true') {
-        await cb(msg);
-        console.log(msg);
-    } else {
-        console.log(msg);
-    }
-}
-
 // Missing Stuff:
 // Whitelist
 // Fuzzy Search + Response with similar sounds
@@ -43,14 +33,14 @@ const getDirectories = srcPath => {
     } catch {
         return [ `Path does not exist: ${srcPath}` ];
     }
-}
+};
 const getFiles = srcPath => {
     try {
         return fs.readdirSync(srcPath).filter(file => !fs.statSync(path.join(srcPath, file)).isDirectory());
     } catch {
         return [ `Path does not exist: ${srcPath}` ];
     }
-}
+};
 
 const findInDir = (dir, filter, fileList = []) => {
     const files = fs.readdirSync(dir);
@@ -67,12 +57,65 @@ const findInDir = (dir, filter, fileList = []) => {
     });
 
     return fileList;
-}
+};
 
 const formatFileListForSlack = (files) => {
-    return "```" +JSON.stringify(files).replace(/\,/g, '\n').replace(/\[|\]|\"/g, '') + "```"
-}
-    
+    return "```" +JSON.stringify(files).replace(/\,/g, '\n').replace(/\[|\]|\"/g, '') + "```";
+};
+
+const knockKnock = async ({say}) => {
+    await say(`_Who's there?_`);
+    sound.play("sounds/kungfury/knockles.mp3");
+};
+
+const playHelp = async ({ message, say }) => {
+    await say("```Commands: \n play <sound> \n play list <folder> \n play listdir \n play search <search>```");
+};
+
+const messageMap = [
+    { match: 'knock knock', cb: knockKnock },
+    { match: 'play help', cb: playHelp },
+];
+
+
+/**
+ * This filters through the messageMap recursively, continuing through the list every time a match is found and returns a positive
+ * value, otherwise it stops after it finds its first match. 
+ * @param {*} param0 
+ * @param {*} index 
+ * @returns void
+ */
+const messageReactor = async function ({ message, say }, index = 0) {
+    const messageMapSlice = messageMap.slice(index);
+    const matchIdx = messageMapSlice.findIndex(messageMatch => {
+        const msg = message.text || '', type = typeof messageMatch.match;
+        if (messageMatch.match && type == 'string') {
+            return msg.includes(messageMatch.match);
+        }
+        if (type == 'function') {
+            return messageMatch.match(msg);
+        }
+        if (messageMatch.match instanceof RegExp) {
+            return messageMatch.match.test(msg);
+        }
+    });
+    if (matchIdx < 0) return;
+    const match = messageMapSlice[matchIdx];
+    const safeSay = async (msg) => {
+        const postAsSlackBot = process.env.REPLY_ENABLED;
+        if (/true/i.test(postAsSlackBot)) {
+            await say(msg);
+            console.log(msg);
+        } else {
+            console.log(msg);
+        }
+    };
+    const proceed = await match.cb({message, say: safeSay});
+    if (proceed) {
+        messageReactor({message, say}, matchIdx + index + 1);
+    }
+};
+
 (async () => {
     const playRegex = /^(play)\s+([a-zA-Z0-9_\-\/]+)/;
     const searchRegex = /^(play search)\s+([a-zA-Z0-9_\-\/]+)/;
@@ -80,14 +123,7 @@ const formatFileListForSlack = (files) => {
 
     await app.start(process.env.PORT || 3009);
 
-    app.message('knock knock', async ({ message, say }) => {
-        await reply(say, `_Who's there?_`);
-        sound.play("sounds/kungfury/knockles.mp3");
-    })
-
-    app.message('play help', async ({ message, say }) => {
-        await reply(say, "```Commands: \n play <sound> \n play list <folder> \n play listdir \n play search <search>```");
-    })
+    app.message(messageReactor);
 
     app.message(listRegex, async ({ message, say }) => {
         const match = message.text.match(listRegex);
@@ -100,7 +136,7 @@ const formatFileListForSlack = (files) => {
             await reply(say, formatFileListForSlack(getFiles('./sounds/' + folder).map((file) => folder + '/' + file.replace('.mp3', ''))));
         }
         
-    })
+    });
 
     app.message(searchRegex, async ({ message, say }) => {
         const match = message.text.match(searchRegex);
@@ -142,7 +178,7 @@ const formatFileListForSlack = (files) => {
         if (numFiles > 1) {
             await reply(say, `Okay, here's the thing... I found ${numFiles} results ending with \`${search}\`, can you be more specific? \n` + formatFileListForSlack(files));
         }
-    })
+    });
     
     console.log('Slack Racket is running! (⚡️ Bolt)');
 })();
