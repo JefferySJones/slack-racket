@@ -72,8 +72,8 @@ const formatFileListForSlack = (files) => {
 }
     
 (async () => {
-    const playRegex = /^(play)\s+([a-zA-Z0-9_\-\/\.]+)/;
-    const searchRegex = /^(play search)\s+([a-zA-Z0-9_\-\/\.]+)/;
+    const playRegex = /^(play)\s+([a-zA-Z0-9_\-\/]+)/;
+    const searchRegex = /^(play search)\s+([a-zA-Z0-9_\-\/]+)/;
     const listRegex = /^(play list|play listdir)(\s+|)(.+)/;
 
     await app.start(process.env.PORT || 3009);
