@@ -31,14 +31,14 @@ const getDirectories = srcPath => {
     try {
         return fs.readdirSync(srcPath).filter(file => fs.statSync(path.join(srcPath, file)).isDirectory());
     } catch {
-        return [ `Path does not exist: ${srcPath}` ];
+        return `Path does not exist: ${srcPath}`;
     }
 };
 const getFiles = srcPath => {
     try {
         return fs.readdirSync(srcPath).filter(file => !fs.statSync(path.join(srcPath, file)).isDirectory());
     } catch {
-        return [ `Path does not exist: ${srcPath}` ];
+        return `Path does not exist: ${srcPath}`;
     }
 };
 
@@ -59,8 +59,22 @@ const findInDir = (dir, filter, fileList = []) => {
     return fileList;
 };
 
-const formatFileListForSlack = (files) => {
-    return "```" +JSON.stringify(files).replace(/\,/g, '\n').replace(/\[|\]|\"/g, '') + "```";
+const formatFileListForSlack = (files,page=1,pageSize=10) => {
+    page = +page;
+    if (typeof page != 'number') {
+        page = 1;
+    }
+    const index = (page - 1) * pageSize;
+    const pagination = files.length > pageSize ?
+        `\nPage ${page} of ${Math.ceil(files.length % pageSize ? Math.floor(files.length / pageSize) + 1 : files.length / pageSize)}`
+        : '';
+    files = files.slice(index, index + pageSize);
+    if (files.length) {
+        const fileList = "```" +JSON.stringify(files).replace(/\,/g, '\n').replace(/\[|\]|\"/g, '') + "```";
+        return fileList+pagination;
+    } else {
+        return 'Page not found.';
+    }
 };
 
 const knockKnock = async ({say}) => {
@@ -72,9 +86,81 @@ const playHelp = async ({ message, say }) => {
     await say("```Commands: \n play <sound> \n play list <folder> \n play listdir \n play search <search>```");
 };
 
+const listRegex = /^(play listdir|play list)(?:\s+|)([^\d\s]+)?(?:\s+|)(\d+)?/;
+const list = async ({message, say}) => {
+    let reply = '';
+    const [,dirMatch,searchFolder,page] = message.text.match(listRegex);
+    if (!searchFolder || dirMatch == 'play listdir') {
+        // Reply with all directories
+        const directories = getDirectories('./sounds');
+        if (directories instanceof Array) {
+            reply = formatFileListForSlack(directories,page,20);
+        } else {
+            reply = directories;
+        }
+    } else {
+        // Reply with files in a given folder
+        let files = getFiles('./sounds/' + searchFolder);
+        if (files instanceof Array) {
+            files = files.map((file) => searchFolder + '/' + file.replace('.mp3', ''));
+            reply = formatFileListForSlack(files, page);
+        } else {
+            reply = files;
+        }
+    }
+    if (reply) {
+        await say(reply);
+    }
+};
+
+const searchRegex = /^(?:play search)\s+([a-zA-Z0-9_\-\/]+)(?:\s+|)(\d+)?/;
+const search = async ({message, say}) => {
+    const [,search,page] = message.text.match(searchRegex);
+    if (!search) {
+        await say(`Yeah, I can't search for nothing... did you mean \`play list\`?`);
+        return;
+    }
+    const files = findInDir('./sounds/', new RegExp(search));
+    const numFiles = files.length;
+
+    if (numFiles === 0) {
+        await say(`Hmm... I couldn't find anything with this term: \`${search}\``);
+        return;
+    }
+    if (numFiles >= 1) {
+        await say(`${numFiles} result(s) for \`${search}\`! \n` + formatFileListForSlack(files,page));
+    }
+};
+
+
+const playRegex = /^(?:play)\s+([a-zA-Z0-9_\-\/]+)/;
+const play = async ({ message, say }) => {
+    const [,search] = message.text.match(playRegex);
+
+    const files = findInDir('./sounds/', new RegExp(search + '\.mp3$'));
+    const numFiles = files.length;
+
+    if (numFiles === 0) {
+        await say(`Hmm... I couldn't find: \`${search}\``);
+        return;
+    }
+    if (numFiles === 1) {
+        await say(`Playing ${files[0]}`);
+        sound.play(`${files[0]}`);
+    }
+    if (numFiles > 1) {
+        await say(`Okay, here's the thing... I found ${numFiles} results ending with \`${search}\`, can you be more specific? \n` + formatFileListForSlack(files));
+    }
+
+};
+
+// Reactive mapping
 const messageMap = [
     { match: 'knock knock', cb: knockKnock },
     { match: 'play help', cb: playHelp },
+    { match: listRegex, cb: list},
+    { match: searchRegex, cb: search},
+    { match: playRegex, cb: play},
 ];
 
 
@@ -117,68 +203,10 @@ const messageReactor = async function ({ message, say }, index = 0) {
 };
 
 (async () => {
-    const playRegex = /^(play)\s+([a-zA-Z0-9_\-\/]+)/;
-    const searchRegex = /^(play search)\s+([a-zA-Z0-9_\-\/]+)/;
-    const listRegex = /^(play list|play listdir)(\s+|)(.+)/;
 
     await app.start(process.env.PORT || 3009);
 
     app.message(messageReactor);
-
-    app.message(listRegex, async ({ message, say }) => {
-        const match = message.text.match(listRegex);
-        const searchFolder = match[3] || match[1] !== 'play listdir';
-        if (!searchFolder) {
-            // Reply with all directories
-            await reply(say, formatFileListForSlack(getDirectories('./sounds')));
-        } else {
-            // Reply with files in a given folder
-            await reply(say, formatFileListForSlack(getFiles('./sounds/' + folder).map((file) => folder + '/' + file.replace('.mp3', ''))));
-        }
-        
-    });
-
-    app.message(searchRegex, async ({ message, say }) => {
-        const match = message.text.match(searchRegex);
-        const search = match[2];
-        if (!search) {
-            await reply(say, `Yeah, I can't search for nothing... did you mean \`play list\`?`);
-            return;
-        }
-        const files = findInDir('./sounds/', new RegExp(search));
-        const numFiles = files.length;
-
-        if (numFiles === 0) {
-            await reply(say, `Hmm... I couldn't find anything with this term: \`${search}\``);
-            return;
-        }
-        if (numFiles >= 1) {
-            await reply(say, `${numFiles} result(s) for \`${search}\`! \n` + formatFileListForSlack(files));
-        }
-    });
-
-    app.message(playRegex, async ({ message, say }) => {
-        const match = message.text.match(playRegex);
-        const search = match[2];
-        if (!search || ['help', 'list', 'search'].includes(search)) {
-            return;
-        }
-
-        const files = findInDir('./sounds/', new RegExp(search + '\.mp3$'));
-        const numFiles = files.length;
-
-        if (numFiles === 0) {
-            await reply(say, `Hmm... I couldn't find: \`${search}\``);
-            return;
-        }
-        if (numFiles === 1) {
-            await reply(say, `Playing ${files[0]}`);
-            sound.play(`${files[0]}`);
-        }
-        if (numFiles > 1) {
-            await reply(say, `Okay, here's the thing... I found ${numFiles} results ending with \`${search}\`, can you be more specific? \n` + formatFileListForSlack(files));
-        }
-    });
     
     console.log('Slack Racket is running! (⚡️ Bolt)');
 })();
