@@ -28,6 +28,7 @@ const reply = async (cb, msg) => {
 // Whitelist
 // Fuzzy Search + Response with similar sounds
 // Speak command connected to amazon polly?
+// Max sound length config
 
 // Prevent sounds from playing while other sounds are playing
 // https://www.npmjs.com/package/get-mp3-duration
