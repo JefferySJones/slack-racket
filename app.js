@@ -1,3 +1,4 @@
+require('dotenv').config();
 const { App } = require('@slack/bolt');
 const sound = require('sound-play');
 const fs = require('fs');
