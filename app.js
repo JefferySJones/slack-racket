@@ -1,9 +1,19 @@
+// Missing Stuff - In priority order:
+// Listen to private channels (Currently only seems to work in public channels?)
+// Prevent sounds from playing while other sounds are playing https://www.npmjs.com/package/get-mp3-duration
+    // Allow other commands to run other than playing sounds while paused
+// Speak command connected to amazon polly?
+// Max sound length config
+// Random-ish responses
+
+// Fuzzy Search? "Did you mean....?"
+// Whitelist?
+
 require('dotenv').config();
 const { App } = require('@slack/bolt');
 const sound = require('sound-play');
 const fs = require('fs');
 const path = require('path');
-
 // import FuzzySearch from 'fuzzy-search';
 
 // Initializes your app with your bot token and signing secret
@@ -13,19 +23,6 @@ const app = new App({
     token: process.env.SLACK_BOT_TOKEN,
     signingSecret: process.env.SLACK_SIGNING_SECRET,
 });
-
-// Missing Stuff:
-// Whitelist
-// Fuzzy Search + Response with similar sounds
-// Speak command connected to amazon polly?
-// Max sound length config
-
-// Prevent sounds from playing while other sounds are playing
-// https://www.npmjs.com/package/get-mp3-duration
-
-// Allow other commands to run other than playing sounds while paused
-
-// Add random messages
 
 const getDirectories = srcPath => {
     try {
