@@ -1,5 +1,8 @@
 // Missing Stuff - In priority order:
 // Listen to private channels (Currently only seems to work in public channels?)
+// User Whitelist/Alias List in google sheets
+// Channel whitelist in google sheets
+// Channel listen / active list
 // Prevent sounds from playing while other sounds are playing https://www.npmjs.com/package/get-mp3-duration
     // Allow other commands to run other than playing sounds while paused
 // Speak command connected to amazon polly?
@@ -7,7 +10,6 @@
 // Random-ish responses
 
 // Fuzzy Search? "Did you mean....?"
-// Whitelist?
 
 require('dotenv').config();
 const { App } = require('@slack/bolt');
@@ -56,7 +58,7 @@ const findInDir = (dir, filter, fileList = []) => {
     return fileList;
 };
 
-const formatFileListForSlack = (files,page=1,pageSize=10) => {
+const formatFileListForSlack = (files,page=1,pageSize=50) => {
     page = +page;
     if (typeof page != 'number') {
         page = 1;
@@ -67,7 +69,7 @@ const formatFileListForSlack = (files,page=1,pageSize=10) => {
         : '';
     files = files.slice(index, index + pageSize);
     if (files.length) {
-        const fileList = "```" +JSON.stringify(files).replace(/\,/g, '\n').replace(/\[|\]|\"/g, '') + "```";
+        const fileList = "```" +JSON.stringify(files).replace(/\,/g, ', ').replace(/\[|\]|\"/g, '') + "```";
         return fileList+pagination;
     } else {
         return 'Page not found.';
@@ -91,7 +93,7 @@ const list = async ({message, say}) => {
         // Reply with all directories
         const directories = getDirectories('./sounds');
         if (directories instanceof Array) {
-            reply = formatFileListForSlack(directories,page,20);
+            reply = formatFileListForSlack(directories,page,50);
         } else {
             reply = directories;
         }
@@ -99,7 +101,7 @@ const list = async ({message, say}) => {
         // Reply with files in a given folder
         let files = getFiles('./sounds/' + searchFolder);
         if (files instanceof Array) {
-            files = files.map((file) => searchFolder + '/' + file.replace('.mp3', ''));
+            files = files.map((file) => file.replace('.mp3', ''));
             reply = formatFileListForSlack(files, page);
         } else {
             reply = files;
@@ -168,7 +170,8 @@ const messageMap = [
  * @param {*} index 
  * @returns void
  */
-const messageReactor = async function ({ message, say }, index = 0) {
+const messageMiddleware = async function ({ message, say }, index = 0) {
+    console.log(message.user + ':', message.text);
     const messageMapSlice = messageMap.slice(index);
     const matchIdx = messageMapSlice.findIndex(messageMatch => {
         const msg = message.text || '', type = typeof messageMatch.match;
@@ -195,7 +198,7 @@ const messageReactor = async function ({ message, say }, index = 0) {
     };
     const proceed = await match.cb({message, say: safeSay});
     if (proceed) {
-        messageReactor({message, say}, matchIdx + index + 1);
+        messageMiddleware({message, say}, matchIdx + index + 1);
     }
 };
 
@@ -203,7 +206,7 @@ const messageReactor = async function ({ message, say }, index = 0) {
 
     await app.start(process.env.PORT || 3009);
 
-    app.message(messageReactor);
+    app.message(messageMiddleware);
     
     console.log('Slack Racket is running! (⚡️ Bolt)');
 })();
