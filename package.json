@@ -12,6 +12,7 @@
     "@slack/bolt": "^3.4.0",
     "dotenv": "^10.0.0",
     "fuzzy-search": "^3.2.1",
+    "get-mp3-duration": "^1.0.0",
     "sound-play": "^1.1.0"
   }
 }

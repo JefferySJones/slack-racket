@@ -3,8 +3,6 @@
 // User Whitelist/Alias List in google sheets
 // Channel whitelist in google sheets
 // Channel listen / active list
-// Prevent sounds from playing while other sounds are playing https://www.npmjs.com/package/get-mp3-duration
-    // Allow other commands to run other than playing sounds while paused
 // Speak command connected to amazon polly?
 // Max sound length config
 // Random-ish responses
@@ -16,6 +14,7 @@ const { App } = require('@slack/bolt');
 const sound = require('sound-play');
 const fs = require('fs');
 const path = require('path');
+const getMP3Duration = require('get-mp3-duration');
 // import FuzzySearch from 'fuzzy-search';
 
 // Initializes your app with your bot token and signing secret
@@ -134,6 +133,13 @@ const search = async ({message, say}) => {
 
 const playRegex = /^(?:play)\s+([a-zA-Z0-9_\-\/]+)/;
 const play = async ({ message, say }) => {
+    if (fs.existsSync('./tmp/lock')) {
+        const timeTilUnlock = ((Number(fs.readFileSync('./tmp/lock', 'utf8')) - Date.now()) / 1000).toFixed(1);
+        if (timeTilUnlock > 0) {
+            say(`Sorry, you need to wait for the other sounds to stop.. Try again in ${timeTilUnlock} seconds`)
+            return;
+        }
+    }
     const [,search] = message.text.match(playRegex);
 
     const files = findInDir('./sounds/', new RegExp(search + '\.mp3$'));
@@ -144,8 +150,17 @@ const play = async ({ message, say }) => {
         return;
     }
     if (numFiles === 1) {
+        const buffer = fs.readFileSync(files[0]);
+        const duration = getMP3Duration(buffer);
+        fs.writeFileSync('./tmp/lock', Date.now() + duration, 'utf8');
+        
         await say(`Playing ${files[0]}`);
         sound.play(`${files[0]}`);
+        setTimeout(() => { 
+            if (fs.existsSync('./tmp/lock')) { 
+                fs.unlinkSync('./tmp/lock');
+            }
+        }, duration);
     }
     if (numFiles > 1) {
         await say(`Okay, here's the thing... I found ${numFiles} results ending with \`${search}\`, can you be more specific? \n` + formatFileListForSlack(files));
@@ -205,6 +220,10 @@ const messageMiddleware = async function ({ message, say }, index = 0) {
 (async () => {
 
     await app.start(process.env.PORT || 3009);
+
+    if (fs.existsSync('./tmp/lock')) { 
+        fs.unlinkSync('./tmp/lock');
+    }
 
     app.message(messageMiddleware);
     
