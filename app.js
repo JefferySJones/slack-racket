@@ -1,13 +1,26 @@
 // Missing Stuff - In priority order:
-// Listen to private channels (Currently only seems to work in public channels?)
 // User Whitelist/Alias List in google sheets
 // Channel whitelist in google sheets
-// Channel listen / active list
 // Speak command connected to amazon polly?
 // Max sound length config
 // Random-ish responses
-
+// Listen to private channels (Currently only seems to work in public channels?)
+// Channel listen / active list
 // Fuzzy Search? "Did you mean....?"
+
+// Replace this with a google sheet
+const userList = {
+    'U0KARF25A': 'jefferyjones',
+    'ULZMECW5R': 'bradenvw'
+};
+
+const onlyAllowRecognizedUsers = true;
+
+// Replace this with a google sheet
+const rateLimitMsList = {
+    'U0KARF25A': 5000,
+    'default': 10000
+};
 
 require('dotenv').config();
 const { App } = require('@slack/bolt');
@@ -140,6 +153,13 @@ const play = async ({ message, say }) => {
             return;
         }
     }
+    if (fs.existsSync('./tmp/' + message.user + '-lock')) {
+        const timeTilUnlock = ((Number(fs.readFileSync('./tmp/' + message.user + '-lock', 'utf8')) - Date.now()) / 1000).toFixed(1);
+        if (timeTilUnlock > 0) {
+            say(`You need to wait to send another play command.. Try again in ${timeTilUnlock} seconds`)
+            return;
+        }
+    }
     const [,search] = message.text.match(playRegex);
 
     const files = findInDir('./sounds/', new RegExp(search + '\.mp3$'));
@@ -161,12 +181,35 @@ const play = async ({ message, say }) => {
                 fs.unlinkSync('./tmp/lock');
             }
         }, duration);
+
+        const rateLimitMs = getUserRateLimit(message.user);
+        fs.writeFileSync('./tmp/' + message.user + '-lock', Date.now() + rateLimitMs, 'utf8');
+        setTimeout(() => { 
+            if (fs.existsSync('./tmp/' + message.user + '-lock')) { 
+                fs.unlinkSync('./tmp/' + message.user + '-lock');
+            }
+        }, rateLimitMs);
     }
     if (numFiles > 1) {
         await say(`Okay, here's the thing... I found ${numFiles} results ending with \`${search}\`, can you be more specific? \n` + formatFileListForSlack(files));
     }
 
 };
+
+const findUser = (user) => {
+    if (userList[user]) {
+        return userList[user];
+    }
+    return null;
+};
+
+const getUserRateLimit = (user) => {
+    if (rateLimitMsList[user] >= 0) {
+        return rateLimitMsList[user];
+    }
+    return rateLimitMsList['default'];
+}
+
 
 // Reactive mapping
 const messageMap = [
@@ -177,7 +220,6 @@ const messageMap = [
     { match: playRegex, cb: play},
 ];
 
-
 /**
  * This filters through the messageMap recursively, continuing through the list every time a match is found and returns a positive
  * value, otherwise it stops after it finds its first match. 
@@ -185,8 +227,18 @@ const messageMap = [
  * @param {*} index 
  * @returns void
  */
-const messageMiddleware = async function ({ message, say }, index = 0) {
-    console.log(message.user + ':', message.text);
+const messageMiddleware = async ({ message, say }, index = 0) => {
+    const foundUser = findUser(message.user);
+    if (!foundUser) {
+        console.log(message.user + ':', message.text);
+    } else {
+        console.log(foundUser + ':', message.text);
+    }
+
+    if (!foundUser && onlyAllowRecognizedUsers) {
+        return;
+    }
+
     const messageMapSlice = messageMap.slice(index);
     const matchIdx = messageMapSlice.findIndex(messageMatch => {
         const msg = message.text || '', type = typeof messageMatch.match;
@@ -218,12 +270,15 @@ const messageMiddleware = async function ({ message, say }, index = 0) {
 };
 
 (async () => {
-
     await app.start(process.env.PORT || 3009);
 
     if (fs.existsSync('./tmp/lock')) { 
         fs.unlinkSync('./tmp/lock');
     }
+
+    fs.readdirSync('./tmp')
+        .filter(file => file.endsWith('-lock'))
+        .forEach(file => fs.unlinkSync('./tmp/' + file));
 
     app.message(messageMiddleware);
     
