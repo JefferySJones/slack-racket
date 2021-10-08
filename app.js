@@ -24,11 +24,32 @@ const rateLimitMsList = {
 
 require('dotenv').config();
 const { App } = require('@slack/bolt');
-const sound = require('sound-play');
+
+// Amazon Polly
+const AWS = require("aws-sdk");
+const uuid = require('uuid');
+
+// Node
 const fs = require('fs');
 const path = require('path');
+const http = require('https');
+
+// MP3 Stuff
+const sound = require('sound-play');
 const getMP3Duration = require('get-mp3-duration');
+
+// Other
 // import FuzzySearch from 'fuzzy-search';
+
+AWS.config.getCredentials(function(err) {
+    if (err) { 
+        // credentials not loaded
+        console.log(err.stack);
+    } else {
+        console.log("AWS Credentials Loaded for Speak Commands");
+    }
+});
+AWS.config.update({ region: 'us-east-1' });
 
 // Initializes your app with your bot token and signing secret
 const app = new App({
@@ -143,6 +164,71 @@ const search = async ({message, say}) => {
     }
 };
 
+const speakRegex = /^(?:speak)\s+([a-zA-Z0-9_\-\/ \?\!\.\,]+)/;
+const speak = async ({ message, say }) => {
+    if (fs.existsSync('./tmp/lock')) {
+        const timeTilUnlock = ((Number(fs.readFileSync('./tmp/lock', 'utf8')) - Date.now()) / 1000).toFixed(1);
+        if (timeTilUnlock > 0) {
+            say(`Sorry, you need to wait for the other sounds to stop.. Try again in ${timeTilUnlock} seconds`)
+            return;
+        }
+    }
+    if (fs.existsSync('./tmp/' + message.user + '-lock')) {
+        const timeTilUnlock = ((Number(fs.readFileSync('./tmp/' + message.user + '-lock', 'utf8')) - Date.now()) / 1000).toFixed(1);
+        if (timeTilUnlock > 0) {
+            say(`You need to wait to send another sound command.. Try again in ${timeTilUnlock} seconds`)
+            return;
+        }
+    }
+
+    const [,speech] = message.text.match(speakRegex);
+    const speechParams = {
+        OutputFormat: "mp3",
+        SampleRate: "16000",
+        Text: speech,
+        TextType: "text",
+        VoiceId: "Brian"
+    };
+    
+    // Create the Polly service object and presigner object
+    const polly = new AWS.Polly({apiVersion: '2016-06-10'});
+    const signer = new AWS.Polly.Presigner(speechParams, polly)
+    
+    // Create presigned URL of synthesized speech file
+    signer.getSynthesizeSpeechUrl(speechParams, function(error, url) {
+        if (error) {
+            console.log(error.stack);
+        } else {
+            const file = fs.createWriteStream("./tmp/speech.mp3");
+            http.get(url, function(response) {
+                response.pipe(file);
+                const path = './tmp/speech.mp3';
+                playFile({ message, say, path });
+            });
+        }
+    });
+};
+
+const playFile = ({ message, say, path }) => {
+    const buffer = fs.readFileSync(path);
+    const duration = getMP3Duration(buffer);
+    fs.writeFileSync('./tmp/lock', Date.now() + duration, 'utf8');
+    
+    sound.play(`${path}`);
+    setTimeout(() => { 
+        if (fs.existsSync('./tmp/lock')) { 
+            fs.unlinkSync('./tmp/lock');
+        }
+    }, duration);
+
+    const rateLimitMs = getUserRateLimit(message.user);
+    fs.writeFileSync('./tmp/' + message.user + '-lock', Date.now() + rateLimitMs, 'utf8');
+    setTimeout(() => { 
+        if (fs.existsSync('./tmp/' + message.user + '-lock')) { 
+            fs.unlinkSync('./tmp/' + message.user + '-lock');
+        }
+    }, rateLimitMs);
+}
 
 const playRegex = /^(?:play)\s+([a-zA-Z0-9_\-\/]+)/;
 const play = async ({ message, say }) => {
@@ -156,7 +242,7 @@ const play = async ({ message, say }) => {
     if (fs.existsSync('./tmp/' + message.user + '-lock')) {
         const timeTilUnlock = ((Number(fs.readFileSync('./tmp/' + message.user + '-lock', 'utf8')) - Date.now()) / 1000).toFixed(1);
         if (timeTilUnlock > 0) {
-            say(`You need to wait to send another play command.. Try again in ${timeTilUnlock} seconds`)
+            say(`You need to wait to send another sound command.. Try again in ${timeTilUnlock} seconds`)
             return;
         }
     }
@@ -170,25 +256,9 @@ const play = async ({ message, say }) => {
         return;
     }
     if (numFiles === 1) {
-        const buffer = fs.readFileSync(files[0]);
-        const duration = getMP3Duration(buffer);
-        fs.writeFileSync('./tmp/lock', Date.now() + duration, 'utf8');
-        
-        await say(`Playing ${files[0]}`);
-        sound.play(`${files[0]}`);
-        setTimeout(() => { 
-            if (fs.existsSync('./tmp/lock')) { 
-                fs.unlinkSync('./tmp/lock');
-            }
-        }, duration);
-
-        const rateLimitMs = getUserRateLimit(message.user);
-        fs.writeFileSync('./tmp/' + message.user + '-lock', Date.now() + rateLimitMs, 'utf8');
-        setTimeout(() => { 
-            if (fs.existsSync('./tmp/' + message.user + '-lock')) { 
-                fs.unlinkSync('./tmp/' + message.user + '-lock');
-            }
-        }, rateLimitMs);
+        const path = files[0];
+        await say(`Playing ${path}`);
+        playFile({ message, say, path });
     }
     if (numFiles > 1) {
         await say(`Okay, here's the thing... I found ${numFiles} results ending with \`${search}\`, can you be more specific? \n` + formatFileListForSlack(files));
@@ -218,6 +288,7 @@ const messageMap = [
     { match: listRegex, cb: list},
     { match: searchRegex, cb: search},
     { match: playRegex, cb: play},
+    { match: speakRegex, cb: speak}
 ];
 
 /**
