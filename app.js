@@ -1,8 +1,6 @@
 // Missing Stuff - In priority order:
 // User Whitelist/Alias List in google sheets
 // Channel whitelist in google sheets
-// Speak command connected to amazon polly?
-// Max sound length config
 // Random-ish responses
 // Listen to private channels (Currently only seems to work in public channels?)
 // Channel listen / active list
@@ -15,6 +13,7 @@ const userList = {
 };
 
 const onlyAllowRecognizedUsers = true;
+const maxSoundLengthSeconds = 15;
 
 // Replace this with a google sheet
 const rateLimitMsList = {
@@ -23,6 +22,8 @@ const rateLimitMsList = {
 };
 
 require('dotenv').config();
+
+const { exec } = require('child_process')
 const { App } = require('@slack/bolt');
 
 // Amazon Polly
@@ -211,10 +212,21 @@ const speak = async ({ message, say }) => {
 
 const playFile = ({ message, say, path }) => {
     const buffer = fs.readFileSync(path);
-    const duration = getMP3Duration(buffer);
+    const fullSoundDuration = getMP3Duration(buffer);
+    const duration = Math.min(fullSoundDuration, maxSoundLengthSeconds * 1000);
     fs.writeFileSync('./tmp/lock', Date.now() + duration, 'utf8');
     
-    sound.play(`${path}`);
+    playing = sound.play(`${path}`).catch(() => console.log('Sound stopped early!'));
+    if (fullSoundDuration > maxSoundLengthSeconds * 1000) {
+        setTimeout(() => {
+            const stopCommand = process.platform === 'darwin' ? `killall afplay` : `Start-Sleep 1; Start-Sleep -s $player.NaturalDuration.TimeSpan.TotalSeconds;Exit;`;
+            // Not sure if this works on windows or not, works fine on mac though. Also might be worth not using killall but targeting the specific process :shrug:
+            // Also, this is kind of hacky, maybe we should use a different play library so we can cancel the sound better.
+            exec(stopCommand);
+        }, maxSoundLengthSeconds * 1000)
+        
+    }
+
     setTimeout(() => { 
         if (fs.existsSync('./tmp/lock')) { 
             fs.unlinkSync('./tmp/lock');
