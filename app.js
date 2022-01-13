@@ -1,6 +1,6 @@
 // Missing Stuff - In priority order:
-// User Whitelist/Alias List in google sheets
-// Channel whitelist in google sheets
+// User Allowlist/Alias List in google sheets
+// Channel allowlist in google sheets
 // Random-ish responses
 // Listen to private channels (Currently only seems to work in public channels?)
 // Channel listen / active list
