@@ -9,7 +9,8 @@
 // Replace this with a google sheet
 const userList = {
     'U0KARF25A': 'jefferyjones',
-    'ULZMECW5R': 'bradenvw'
+    'ULZMECW5R': 'bradenvw',
+    'U02B5UC52': 'bill',
 };
 
 const onlyAllowRecognizedUsers = true;
