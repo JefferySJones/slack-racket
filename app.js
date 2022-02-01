@@ -23,6 +23,10 @@ const rateLimitMsList = {
 
 require('dotenv').config();
 
+const envBool = (str) => {
+    return /true/i.test(process.env[str]);
+}
+
 const { exec } = require('child_process')
 const { App } = require('@slack/bolt');
 
@@ -42,7 +46,11 @@ const getMP3Duration = require('get-mp3-duration');
 // Other
 // import FuzzySearch from 'fuzzy-search';
 const WebSocket = require('ws')
-const wss = new WebSocket.Server({ port: 20224 })
+let wss = { on: () => console.log('Websocket server is not on but attempted to run methods.') }
+if (envBool('IS_SERVER')) {
+    wss = new WebSocket.Server({ port: process.env.WS_PORT })
+}
+
 
 AWS.config.getCredentials(function(err) {
     if (err) { 
@@ -325,10 +333,10 @@ const messageMiddleware = async ({ message, say }, index = 0) => {
     lastMessageTs = messageTs
 
     // Send messages to clients / prevent duplicate timestamps
-    if (/true/i.test(process.env.isServer) && lastMessageTs > messageTs) {
+    if (envBool('IS_SERVER') && lastMessageTs >= messageTs) {
         clients.forEach((ws) => {
-            ws.send(JSON.stringify(message))
-        })
+            ws.send(JSON.stringify(message));
+        });
     }
     
     // Process found users and potentially prevent unrecognized users from playing sounds
@@ -358,7 +366,7 @@ const messageMiddleware = async ({ message, say }, index = 0) => {
     if (matchIdx < 0) return;
     const match = messageMapSlice[matchIdx];
     const safeSay = async (msg) => {
-        const postAsSlackBot = process.env.REPLY_ENABLED;
+        const postAsSlackBot = envBool('REPLY_ENABLED') && envBool('IS_SERVER');
         if (/true/i.test(postAsSlackBot)) {
             await say(msg);
             console.log(msg);
@@ -379,6 +387,17 @@ wss.createUniqueID = function () {
     return s4() + s4() + '-' + s4();
 };
 
+const connectToServer = async () => {
+    const clientConnection = new WebSocket(process.env.WS_URL);
+
+    clientConnection.onopen = () => {
+        console.log('WebSocket Client Connected');
+      };
+    clientConnection.onmessage = (evt) => {
+        messageMiddleware({ message: JSON.parse(evt.data) });
+    };
+}
+
 (async () => {
     if (fs.existsSync('./tmp/lock')) { 
         fs.unlinkSync('./tmp/lock');
@@ -388,16 +407,18 @@ wss.createUniqueID = function () {
         .filter(file => file.endsWith('-lock'))
         .forEach(file => fs.unlinkSync('./tmp/' + file));
     
-    if (/true/i.test(process.env.isServer)) {
+    if (envBool('IS_SERVER')) {
         await app.start(process.env.PORT || 3009);
+
+        console.log('Websockets at port: ' + process.env.WS_PORT)
 
         wss.on('connection', ws => {
             ws.id = wss.createUniqueID();
             clients.push(ws)
-            let activeClients = clients.map(client => client.id).join(', ')
+            let getActiveClients = () => { return clients.map(client => client.id).join(', ')}
     
             console.log('[Server] New connection: ' + ws.id)
-            console.log('[Server] Active Clients: ' + activeClients)
+            console.log('[Server] Active Clients: ' + getActiveClients())
     
             ws.on('message', msg => {
               console.log(`[Server] ${ws.id} => ${msg}`)
@@ -406,13 +427,13 @@ wss.createUniqueID = function () {
             ws.on('close', () => {
                 clients.splice(clients.indexOf(ws), 1)
                 console.log('[Server] Client disconnected: ' + ws.id)
-                console.log('[Server] Active Clients: ' + activeClients)
+                console.log('[Server] Active Clients: ' + getActiveClients())
             })        
         })
         app.message(messageMiddleware);
     } else {
-        // TODO: Implement client logic
-        // Websocket listen for client and send to message middleware
+        console.log('client running')
+        await connectToServer();
     }
     
     console.log('Slack Racket is running! (⚡️ Bolt)');
