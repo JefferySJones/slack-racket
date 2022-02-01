@@ -41,6 +41,8 @@ const getMP3Duration = require('get-mp3-duration');
 
 // Other
 // import FuzzySearch from 'fuzzy-search';
+const WebSocket = require('ws')
+const wss = new WebSocket.Server({ port: 20224 })
 
 AWS.config.getCredentials(function(err) {
     if (err) { 
@@ -214,7 +216,7 @@ const playFile = ({ message, say, path }) => {
     const buffer = fs.readFileSync(path);
     const fullSoundDuration = getMP3Duration(buffer);
     const duration = Math.min(fullSoundDuration, maxSoundLengthSeconds * 1000);
-    fs.writeFileSync('./tmp/lock', Date.now() + duration, 'utf8');
+    fs.writeFileSync('./tmp/lock', String(Date.now() + duration), 'utf8');
     
     playing = sound.play(`${path}`).catch(() => console.log('Sound stopped early!'));
     if (fullSoundDuration > maxSoundLengthSeconds * 1000) {
@@ -234,7 +236,7 @@ const playFile = ({ message, say, path }) => {
     }, duration);
 
     const rateLimitMs = getUserRateLimit(message.user);
-    fs.writeFileSync('./tmp/' + message.user + '-lock', Date.now() + rateLimitMs, 'utf8');
+    fs.writeFileSync('./tmp/' + message.user + '-lock', String(Date.now() + rateLimitMs), 'utf8');
     setTimeout(() => { 
         if (fs.existsSync('./tmp/' + message.user + '-lock')) { 
             fs.unlinkSync('./tmp/' + message.user + '-lock');
@@ -303,6 +305,9 @@ const messageMap = [
     { match: speakRegex, cb: speak}
 ];
 
+const clients = []
+let lastMessageTs = 0
+
 /**
  * This filters through the messageMap recursively, continuing through the list every time a match is found and returns a positive
  * value, otherwise it stops after it finds its first match. 
@@ -311,13 +316,28 @@ const messageMap = [
  * @returns void
  */
 const messageMiddleware = async ({ message, say }, index = 0) => {
+    
+    // Prevent old messages from triggering sounds
+    messageTs = parseFloat(message.ts)
+    if (lastMessageTs >= messageTs) {
+        return;
+    }
+    lastMessageTs = messageTs
+
+    // Send messages to clients / prevent duplicate timestamps
+    if (/true/i.test(process.env.isServer) && lastMessageTs > messageTs) {
+        clients.forEach((ws) => {
+            ws.send(JSON.stringify(message))
+        })
+    }
+    
+    // Process found users and potentially prevent unrecognized users from playing sounds
     const foundUser = findUser(message.user);
     if (!foundUser) {
-        console.log(message.user + ':', message.text);
+        console.log('[Unrecognized] ' + message.user + ':', message.text);
     } else {
         console.log(foundUser + ':', message.text);
     }
-
     if (!foundUser && onlyAllowRecognizedUsers) {
         return;
     }
@@ -352,9 +372,14 @@ const messageMiddleware = async ({ message, say }, index = 0) => {
     }
 };
 
-(async () => {
-    await app.start(process.env.PORT || 3009);
+wss.createUniqueID = function () {
+    function s4() {
+        return Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
+    }
+    return s4() + s4() + '-' + s4();
+};
 
+(async () => {
     if (fs.existsSync('./tmp/lock')) { 
         fs.unlinkSync('./tmp/lock');
     }
@@ -362,8 +387,33 @@ const messageMiddleware = async ({ message, say }, index = 0) => {
     fs.readdirSync('./tmp')
         .filter(file => file.endsWith('-lock'))
         .forEach(file => fs.unlinkSync('./tmp/' + file));
+    
+    if (/true/i.test(process.env.isServer)) {
+        await app.start(process.env.PORT || 3009);
 
-    app.message(messageMiddleware);
+        wss.on('connection', ws => {
+            ws.id = wss.createUniqueID();
+            clients.push(ws)
+            let activeClients = clients.map(client => client.id).join(', ')
+    
+            console.log('[Server] New connection: ' + ws.id)
+            console.log('[Server] Active Clients: ' + activeClients)
+    
+            ws.on('message', msg => {
+              console.log(`[Server] ${ws.id} => ${msg}`)
+            })
+    
+            ws.on('close', () => {
+                clients.splice(clients.indexOf(ws), 1)
+                console.log('[Server] Client disconnected: ' + ws.id)
+                console.log('[Server] Active Clients: ' + activeClients)
+            })        
+        })
+        app.message(messageMiddleware);
+    } else {
+        // TODO: Implement client logic
+        // Websocket listen for client and send to message middleware
+    }
     
     console.log('Slack Racket is running! (⚡️ Bolt)');
 })();

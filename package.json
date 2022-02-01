@@ -15,6 +15,7 @@
     "fuzzy-search": "^3.2.1",
     "get-mp3-duration": "^1.0.0",
     "sound-play": "^1.1.0",
-    "uuid": "^8.3.2"
+    "uuid": "^8.3.2",
+    "ws": "^8.4.2"
   }
 }
