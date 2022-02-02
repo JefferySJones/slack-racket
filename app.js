@@ -12,7 +12,8 @@ const userList = {
     'ULZMECW5R': 'bradenvw',
     'U02B5UC52': 'bill',
     'U01KVDKNFRP': 'phil',
-    'U01K4SGU11P': 'kevin'
+    'U01K4SGU11P': 'kevin',
+    'U41KEM8UB': 'sebastian'
 };
 
 const onlyAllowRecognizedUsers = true;
