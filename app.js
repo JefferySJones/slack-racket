@@ -22,6 +22,7 @@ const maxSoundLengthSeconds = 15;
 // Replace this with a google sheet
 const rateLimitMsList = {
     'U0KARF25A': 5000,
+    'ULZMECW5R': 5000,
     'default': 10000
 };
 
@@ -400,14 +401,34 @@ wss.createUniqueID = function () {
     return s4() + s4() + '-' + s4();
 };
 
-const connectToServer = async () => {
+const connectToServer = async (resolve, reject) => {
     const clientConnection = new WebSocket(process.env.WS_URL);
-
+    clientConnection.onerror = (e) => {
+        console.log('WebSocket Client Connection Errored:', `"${e.message}"`);
+        reject(e);
+    };
     clientConnection.onopen = () => {
         console.log('WebSocket Client Connected');
       };
     clientConnection.onmessage = (evt) => {
         messageMiddleware({ message: JSON.parse(evt.data) });
+    };
+    clientConnection.onclose = async (evt) => {
+        console.log('WebSocket Client Connection Closed.');
+        if (/true/.test(process.env.RETRY_CONNECT) && evt.code == 1006) {
+            console.log('Retrying to connect in 5 seconds...');
+            await new Promise((res, rej) => {
+                setTimeout(async () => {
+                    try {
+                        res(await connectToServer(resolve, reject));
+                    } catch (e) {
+                        rej(e);
+                    }
+                }, 5000)
+            });
+        } else {
+            resolve(true);
+        }
     };
 }
 
@@ -446,7 +467,7 @@ const connectToServer = async () => {
         app.message(messageMiddleware);
     } else {
         console.log('client running')
-        await connectToServer();
+        await (new Promise(connectToServer)).catch(e => false);
     }
     
     console.log('Slack Racket is running! (⚡️ Bolt)');
