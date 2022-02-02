@@ -11,6 +11,8 @@ const userList = {
     'U0KARF25A': 'jefferyjones',
     'ULZMECW5R': 'bradenvw',
     'U02B5UC52': 'bill',
+    'U01KVDKNFRP': 'phil',
+    'U01K4SGU11P': 'kevin'
 };
 
 const onlyAllowRecognizedUsers = true;
@@ -66,12 +68,15 @@ if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && envBoo
 }
 
 // Initializes your app with your bot token and signing secret
-const app = new App({
-    socketMode: true,
-    appToken: process.env.APP_TOKEN,
-    token: process.env.SLACK_BOT_TOKEN,
-    signingSecret: process.env.SLACK_SIGNING_SECRET,
-});
+let app;
+if(envBool('IS_SERVER')) {
+    app = new App({
+        socketMode: true,
+        appToken: process.env.APP_TOKEN,
+        token: process.env.SLACK_BOT_TOKEN,
+        signingSecret: process.env.SLACK_SIGNING_SECRET,
+    });
+}
 
 const getDirectories = srcPath => {
     try {
