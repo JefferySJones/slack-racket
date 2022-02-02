@@ -9,9 +9,10 @@
 ... (will update with instructions here soon)
 ## Clients
 1. Change WS_URL and WS_PORT to the url and port the server is running
-2. Set IS_SERVER to false
-3. To get Speak to work: change ENABLE_SPEAK to true Set up an amazon polly account / fill in the related aws keys https://docs.aws.amazon.com/polly/latest/dg/getting-started.html
-4. Have fun!
+2. Make a directory for tmp `mkdir ./tmp`
+3. Set IS_SERVER to false
+4. To get Speak to work: change ENABLE_SPEAK to true Set up an amazon polly account / fill in the related aws keys https://docs.aws.amazon.com/polly/latest/dg/getting-started.html
+5. Have fun!
 
 ## Running the server
 
