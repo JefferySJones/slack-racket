@@ -53,15 +53,17 @@ if (envBool('IS_SERVER')) {
 }
 
 
-AWS.config.getCredentials(function(err) {
-    if (err) { 
-        // credentials not loaded
-        console.log(err.stack);
-    } else {
-        console.log("AWS Credentials Loaded for Speak Commands");
-    }
-});
-AWS.config.update({ region: 'us-east-1' });
+if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && envBool('ENABLE_SPEAK')) {
+    AWS.config.getCredentials(function(err) {
+        if (err) { 
+            // credentials not loaded
+            console.log(err.stack);
+        } else {
+            console.log("AWS Credentials Loaded for Speak Commands");
+        }
+    });
+    AWS.config.update({ region: 'us-east-1' });
+}
 
 // Initializes your app with your bot token and signing secret
 const app = new App({
@@ -178,6 +180,10 @@ const search = async ({message, say}) => {
 
 const speakRegex = /^(?:speak)\s+([a-zA-Z0-9_\-\/ \?\!\.\,]+)/;
 const speak = async ({ message, say }) => {
+    if (!envBool('ENABLE_SPEAK')) {
+        console.log('Speak commands not enabled.');
+        return;
+    }
     if (fs.existsSync('./tmp/lock')) {
         const timeTilUnlock = ((Number(fs.readFileSync('./tmp/lock', 'utf8')) - Date.now()) / 1000).toFixed(1);
         if (timeTilUnlock > 0) {
