@@ -227,7 +227,7 @@ const speak = async ({ message, say }) => {
             const file = fs.createWriteStream("./tmp/speech.mp3");
             http.get(url, function(response) {
                 response.pipe(file);
-                const filePath = path.join(__dirname, '/tmp/speech.mp3');
+                const filePath = path.join(__dirname, 'tmp/speech.mp3');
                 playFile({ message, say, filePath });
             });
         }
