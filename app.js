@@ -227,20 +227,20 @@ const speak = async ({ message, say }) => {
             const file = fs.createWriteStream("./tmp/speech.mp3");
             http.get(url, function(response) {
                 response.pipe(file);
-                const path = './tmp/speech.mp3';
-                playFile({ message, say, path });
+                const filePath = path.join(__dirname, '/tmp/speech.mp3');
+                playFile({ message, say, filePath });
             });
         }
     });
 };
 
-const playFile = ({ message, say, path }) => {
-    const buffer = fs.readFileSync(path);
+const playFile = ({ message, say, filePath }) => {
+    const buffer = fs.readFileSync(filePath);
     const fullSoundDuration = getMP3Duration(buffer);
     const duration = Math.min(fullSoundDuration, maxSoundLengthSeconds * 1000);
     fs.writeFileSync('./tmp/lock', String(Date.now() + duration), 'utf8');
-    
-    playing = sound.play(`${path}`, 1).catch(() => console.log('Sound stopped early!'));
+
+    playing = sound.play(`${filePath}`, 1).catch(() => console.log('Sound stopped early!'));
     if (fullSoundDuration > maxSoundLengthSeconds * 1000) {
         setTimeout(() => {
             const stopCommand = process.platform === 'darwin' ? `killall afplay` : `Start-Sleep 1; Start-Sleep -s $player.NaturalDuration.TimeSpan.TotalSeconds;Exit;`;
@@ -292,9 +292,10 @@ const play = async ({ message, say }) => {
         return;
     }
     if (numFiles === 1) {
-        const path = files[0];
-        await say(`Playing ${path}`);
-        playFile({ message, say, path });
+        const fileName = files[0];
+        await say(`Playing ${fileName}`);
+        const filePath = path.join(__dirname, fileName);
+        playFile({ message, say, filePath });
     }
     if (numFiles > 1) {
         await say(`Okay, here's the thing... I found ${numFiles} results ending with \`${search}\`, can you be more specific? \n` + formatFileListForSlack(files));
