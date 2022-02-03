@@ -228,11 +228,7 @@ const speak = async ({ message, say }) => {
             http.get(url, function(response) {
                 response.pipe(file);
                 const filePath = path.join(__dirname, 'tmp/speech.mp3');
-                
-                response.on('end', () => {
-                    file.close();
-                    playFile({ message, say, filePath, volume: 1 });
-                })
+                playFile({ message, say, filePath, volume: 1 });
             });
         }
     });
