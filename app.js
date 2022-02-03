@@ -240,7 +240,7 @@ const playFile = ({ message, say, path }) => {
     const duration = Math.min(fullSoundDuration, maxSoundLengthSeconds * 1000);
     fs.writeFileSync('./tmp/lock', String(Date.now() + duration), 'utf8');
     
-    playing = sound.play(`${path}`).catch(() => console.log('Sound stopped early!'));
+    playing = sound.play(`${path}`, 1).catch(() => console.log('Sound stopped early!'));
     if (fullSoundDuration > maxSoundLengthSeconds * 1000) {
         setTimeout(() => {
             const stopCommand = process.platform === 'darwin' ? `killall afplay` : `Start-Sleep 1; Start-Sleep -s $player.NaturalDuration.TimeSpan.TotalSeconds;Exit;`;
