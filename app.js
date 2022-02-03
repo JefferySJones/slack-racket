@@ -228,19 +228,19 @@ const speak = async ({ message, say }) => {
             http.get(url, function(response) {
                 response.pipe(file);
                 const filePath = path.join(__dirname, 'tmp/speech.mp3');
-                playFile({ message, say, filePath });
+                playFile({ message, say, filePath, volume: 1 });
             });
         }
     });
 };
 
-const playFile = ({ message, say, filePath }) => {
+const playFile = ({ message, say, filePath, volume = 0.5 }) => {
     const buffer = fs.readFileSync(filePath);
     const fullSoundDuration = getMP3Duration(buffer);
     const duration = Math.min(fullSoundDuration, maxSoundLengthSeconds * 1000);
     fs.writeFileSync('./tmp/lock', String(Date.now() + duration), 'utf8');
 
-    playing = sound.play(`${filePath}`, 1).catch(() => console.log('Sound stopped early!'));
+    playing = sound.play(`${filePath}`, volume).catch(() => console.log('Sound stopped early!'));
     if (fullSoundDuration > maxSoundLengthSeconds * 1000) {
         setTimeout(() => {
             const stopCommand = process.platform === 'darwin' ? `killall afplay` : `Start-Sleep 1; Start-Sleep -s $player.NaturalDuration.TimeSpan.TotalSeconds;Exit;`;
