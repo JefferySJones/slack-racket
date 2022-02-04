@@ -69,7 +69,13 @@ if(envBool('IS_SERVER')) {
     });
 }
 
+if (!fs.existsSync('./tmp')) fs.mkdirSync('./tmp');
+
 const getUserList = () => {
+    if (!fs.existsSync('user-list.json')) {
+        fs.writeFileSync('./user-list.json', '{ "USLACKBOT": "Slack Bot" }', 'utf8');
+    }
+
     const json = fs.readFileSync('user-list.json', 'utf-8');
     return JSON.parse(json);
 }
