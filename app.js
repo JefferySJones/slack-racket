@@ -15,6 +15,7 @@ const userList = {
     'U01K4SGU11P': 'kevin',
     'U41KEM8UB': 'sebastian',
     'U06DL32HG': 'stoutie',
+    'UHJJ2V7D3': 'paul',
 };
 
 const onlyAllowRecognizedUsers = true;
