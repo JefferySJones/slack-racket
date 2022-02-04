@@ -6,19 +6,6 @@
 // Channel listen / active list
 // Fuzzy Search? "Did you mean....?"
 
-// Replace this with a google sheet
-const userList = {
-    'U0KARF25A': 'jefferyjones',
-    'ULZMECW5R': 'bradenvw',
-    'U02B5UC52': 'bill',
-    'U01KVDKNFRP': 'phil',
-    'U01K4SGU11P': 'kevin',
-    'U41KEM8UB': 'sebastian',
-    'U06DL32HG': 'stoutie',
-    'UHJJ2V7D3': 'paul',
-};
-
-const onlyAllowRecognizedUsers = true;
 const maxSoundLengthSeconds = 15;
 
 // Replace this with a google sheet
@@ -80,6 +67,11 @@ if(envBool('IS_SERVER')) {
         token: process.env.SLACK_BOT_TOKEN,
         signingSecret: process.env.SLACK_SIGNING_SECRET,
     });
+}
+
+const getUserList = () => {
+    const json = fs.readFileSync('user-list.json', 'utf-8');
+    return JSON.parse(json);
 }
 
 const getDirectories = srcPath => {
@@ -306,7 +298,8 @@ const play = async ({ message, say }) => {
 };
 
 const findUser = (user) => {
-    if (userList[user]) {
+    const userList = getUserList();
+    if (userList && userList[user]) {
         return userList[user];
     }
     return null;
@@ -341,30 +334,31 @@ let lastMessageTs = 0
  * @returns void
  */
 const messageMiddleware = async ({ message, say }, index = 0) => {
-    
-    // Prevent old messages from triggering sounds
-    messageTs = parseFloat(message.ts)
-    if (lastMessageTs >= messageTs) {
-        return;
-    }
-    lastMessageTs = messageTs
-
-    // Send messages to clients / prevent duplicate timestamps
-    if (envBool('IS_SERVER') && lastMessageTs >= messageTs) {
-        clients.forEach((ws) => {
-            ws.send(JSON.stringify(message));
-        });
-    }
-    
-    // Process found users and potentially prevent unrecognized users from playing sounds
-    const foundUser = findUser(message.user);
-    if (!foundUser) {
-        console.log('[Unrecognized] ' + message.user + ':', message.text);
-    } else {
-        console.log(foundUser + ':', message.text);
-    }
-    if (!foundUser && onlyAllowRecognizedUsers) {
-        return;
+    if (index === 0) {
+        // Prevent old messages from triggering sounds
+        messageTs = parseFloat(message.ts)
+        if (lastMessageTs >= messageTs) {
+            return;
+        }
+        lastMessageTs = messageTs
+        
+        // Process found users and potentially prevent unrecognized users from playing sounds
+        const foundUser = findUser(message.user);
+        if (!foundUser) {
+            console.log('[Unrecognized] ' + message.user + ':', message.text);
+        } else {
+            console.log(foundUser + ':', message.text);
+        }
+        if (!foundUser && envBool('LIMIT_UNRECOGNIZED')) {
+            return;
+        }
+        
+        // Send messages to clients
+        if (envBool('IS_SERVER')) {
+            clients.forEach((ws) => {
+                ws.send(JSON.stringify(message));
+            });
+        }
     }
 
     const messageMapSlice = messageMap.slice(index);
