@@ -13,7 +13,8 @@ const userList = {
     'U02B5UC52': 'bill',
     'U01KVDKNFRP': 'phil',
     'U01K4SGU11P': 'kevin',
-    'U41KEM8UB': 'sebastian'
+    'U41KEM8UB': 'sebastian',
+    'U06DL32HG': 'stoutie',
 };
 
 const onlyAllowRecognizedUsers = true;
