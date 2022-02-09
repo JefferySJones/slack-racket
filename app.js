@@ -39,6 +39,7 @@ const getMP3Duration = require('get-mp3-duration');
 
 // Other
 // import FuzzySearch from 'fuzzy-search';
+const { decode } = require('html-entities');
 const WebSocket = require('ws')
 let wss = { on: () => console.log('Websocket server is not on but attempted to run methods.') }
 if (envBool('IS_SERVER')) {
@@ -185,7 +186,7 @@ const search = async ({message, say}) => {
     }
 };
 
-const speakRegex = /^(?:speak)\s+([a-zA-Z0-9_\-\/ \?\!\.\,]+)/;
+const speakRegex = /^(?:speak)\s+([a-zA-Z0-9_\-\/ \?\!\.\,\&\'\"\+\;\:\=]+)/;
 const speak = async ({ message, say }) => {
     if (!envBool('ENABLE_SPEAK')) {
         console.log('Speak commands not enabled.');
@@ -206,12 +207,15 @@ const speak = async ({ message, say }) => {
         }
     }
 
-    const [,speech] = message.text.match(speakRegex);
+    
+    const [,speechCommand] = message.text.match(speakRegex);
+    // Allow for SSML
+    const speech = `<speak>${decode(speechCommand)}</speak>`;
     const speechParams = {
         OutputFormat: "mp3",
         SampleRate: "16000",
         Text: speech,
-        TextType: "text",
+        TextType: "ssml",
         VoiceId: "Brian"
     };
     
