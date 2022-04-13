@@ -32,6 +32,7 @@ const uuid = require('uuid');
 const fs = require('fs');
 const path = require('path');
 const http = require('https');
+const fetch = require("node-fetch-commonjs");
 
 // MP3 Stuff
 const sound = require('sound-play');
@@ -72,13 +73,23 @@ if(envBool('IS_SERVER')) {
 
 if (!fs.existsSync('./tmp')) fs.mkdirSync('./tmp');
 
-const getUserList = () => {
-    if (!fs.existsSync('user-list.json')) {
-        fs.writeFileSync('./user-list.json', '{ "USLACKBOT": "Slack Bot" }', 'utf8');
-    }
+const cache = {};
 
-    const json = fs.readFileSync('user-list.json', 'utf-8');
-    return JSON.parse(json);
+const getUserList = () => {
+    if (process.env.USER_LIST_URL) {
+        if (cache.userList && typeof cache.userList == 'object') return cache.userList;
+        
+        return fetch(process.env.USER_LIST_URL)
+            .then(response => response.json())
+            .then(data => { cache.userList = data; return data });
+    } else {
+        if (!fs.existsSync('user-list.json')) {
+            fs.writeFileSync('./user-list.json', '{ "USLACKBOT": "Slack Bot" }', 'utf8');
+        }
+    
+        const json = fs.readFileSync('user-list.json', 'utf-8');
+        return JSON.parse(json);
+    }
 }
 
 const getDirectories = srcPath => {
